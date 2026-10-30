@@ -11,8 +11,11 @@ struct snake {
     int x[MAX_LEN], y[MAX_LEN];
     int len;
     int dx, dy;
+    int pdx[8], pdy[8];     /* pending turns, applied one per tick */
+    int pq_head, pq_tail;
     int food_x, food_y;
     int score;
+    int dead;
     unsigned rng;
 };
 
