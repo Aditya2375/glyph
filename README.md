@@ -45,9 +45,12 @@ game_run(&g);                /* raw terminal, real clock */
 - **Double buffering**: draw into the back buffer; `screen_flush` writes
   only the cells that changed, positioned with ANSI escapes.
 - **Input**: a bounded queue fed from non-blocking reads; escape sequences
-  decode to `GK_UP/DOWN/LEFT/RIGHT`.
-- **The loop**: fixed timestep - update, draw, flush, sleep for the rest
-  of the frame.
+  decode to `GK_UP/DOWN/LEFT/RIGHT`, even when a sequence arrives split
+  across two reads. Dropped keys on a full queue are counted.
+- **The loop**: fixed timestep with a real accumulator - updates run at
+  exactly the requested fps (clamped to 1..1000), rendering happens once
+  per pass, and a slow frame catches up in bounded steps instead of
+  drifting or busy-spinning.
 - **Headless mode**: `game_run_headless` ticks the same update/draw code
   with scripted input and no terminal, which is how the test suite plays
   snake for real.
@@ -55,17 +58,23 @@ game_run(&g);                /* raw terminal, real clock */
 ## Architecture and tests
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). `./tests/run-tests.sh`
-runs 27 checks: engine primitives, and gameplay itself - steering,
-no-reverse, eating and growth, wall death, quitting - plus a golden
-rendered frame. CI runs the same script on every push.
+runs 45 checks: engine primitives, and gameplay itself - steering,
+same-tick double turns, tail-vacation moves, eating and growth, wall
+death, the game-over screen, quitting - plus a golden rendered frame.
+Two games ship as examples: snake and a Game of Life. CI runs the same
+script on every push.
 
 ## Tested / not tested
 
-Tested here: 18 engine unit checks (screen, diff flush, input queue and
-escape decoding over a real pipe, collision), 9 headless gameplay checks
-that drive snake for real (steering, blocked reverse, eating/growth, wall
-death, quitting), and a byte-exact golden rendered frame.
+Tested here: 23 engine unit checks (screen, diff flush, input queue with
+drop counting, escape decoding including sequences split across reads,
+fps clamping, collision), 17 headless gameplay checks that drive snake
+for real (steering, blocked reverse, same-tick double turns, tail
+vacation, eating/growth, wall death, the game-over screen flow,
+quitting), 5 Game of Life checks (glider translation, still lifes), and
+a byte-exact golden rendered frame. The real terminal loop is exercised
+on a pty: it renders frames and exits cleanly on q.
 
-Not tested: interactive play by a human on a real terminal (the game logic
-is headless-verified; the ANSI output is verified as text, not by eye on
-every terminal emulator), window resize, and non-ANSI terminals.
+Not tested: window resize mid-game, non-ANSI terminals, and long
+interactive sessions by a human (logic is headless-verified; ANSI output
+is verified as text and on a pty, not by eye on every emulator).
