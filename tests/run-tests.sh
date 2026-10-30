@@ -14,6 +14,10 @@ cc -std=gnu11 -O2 -g -Wall -Wextra -Werror -Isrc -Iexamples -DSNAKE_NO_MAIN \
     tests/test_snake.c examples/snake.c build/libglyph.a -o "$OUT/test_snake"
 "$OUT/test_snake"
 
+cc -std=gnu11 -O2 -g -Wall -Wextra -Werror -Isrc -Iexamples -DSNAKE_NO_MAIN -DLIFE_NO_MAIN \
+    tests/test_life.c examples/life.c build/libglyph.a -o "$OUT/test_life"
+"$OUT/test_life"
+
 # golden render: 5 idle ticks of snake, dumped as text
 cc -std=gnu11 -O2 -g -Wall -Wextra -Werror -Isrc -Iexamples -DSNAKE_NO_MAIN \
     tests/dump_frame.c examples/snake.c build/libglyph.a -o "$OUT/dump_frame"

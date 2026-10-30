@@ -62,5 +62,37 @@ int main(void) {
     CHECK(box_overlap((struct box){0, 0, 2, 2}, (struct box){5, 5, 1, 1}) == 0, "apart");
 
     screen_free(&s);
+    /* an escape sequence split across reads decodes as one key */
+    {
+        int fds[2];
+        if (pipe(fds) != 0) { CHECK(0, "pipe"); return 1; }
+        struct input in = {0};
+        if (write(fds[1], "\033[", 2) != 2) { CHECK(0, "write"); return 1; }
+        input_read_fd(&in, fds[0]);
+        CHECK(input_poll(&in) == GK_NONE, "partial escape waits");
+        if (write(fds[1], "A", 1) != 1) { CHECK(0, "write"); return 1; }
+        input_read_fd(&in, fds[0]);
+        CHECK(input_poll(&in) == GK_UP, "completed escape decodes to UP");
+        close(fds[0]); close(fds[1]);
+    }
+
+    /* a full input queue drops keys but counts them */
+    {
+        struct input in = {0};
+        for (int i = 0; i < 200; i++) input_push(&in, 'a' + (i % 26));
+        CHECK(in.dropped == 200 - 63, "dropped keys are counted");
+    }
+
+    /* fps clamps to a sane range */
+    {
+        struct game g2;
+        game_init(&g2, 8, 4, 5000);
+        CHECK(g2.fps == 1000, "fps clamped high");
+        screen_free(&g2.screen);
+        game_init(&g2, 8, 4, 0);
+        CHECK(g2.fps == 1, "fps clamped low");
+        screen_free(&g2.screen);
+    }
+
     TEST_RESULTS();
 }

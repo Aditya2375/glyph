@@ -51,10 +51,14 @@ int main(void) {
     CHECK(s.len == 4, "grew to 4");
     screen_free(&g.screen);
 
-    /* wall kills */
+    /* wall kills, and the game-over screen waits for a key */
     snake_setup(&g, &s, 42);
     game_run_headless(&g, 40, NULL, 0);   /* run right into the wall */
-    CHECK(g.running == 0, "wall ends the game");
+    CHECK(s.dead == 1, "wall marks the snake dead");
+    CHECK(g.running == 1, "game-over screen stays up");
+    int done[] = {' '};
+    game_run_headless(&g, 1, done, 1);
+    CHECK(g.running == 0, "a key leaves the game-over screen");
     screen_free(&g.screen);
 
     /* q quits */
@@ -63,6 +67,41 @@ int main(void) {
     game_run_headless(&g, 1, quit, 1);
     CHECK(g.running == 0, "q quits");
     screen_free(&g.screen);
+
+    /* two turns in one tick can't reverse the snake anymore */
+    {
+        /* moving right; UP then LEFT in the same tick must turn up first,
+           then left next tick - never instant-left into the body */
+        int both[] = {GK_UP, GK_LEFT};
+        run(&g, &s, 2, both, 2);
+        CHECK(g.running == 1, "same-tick double turn survives");
+        CHECK(s.x[0] == 9 && s.y[0] == 9, "went up then left over two ticks");
+        screen_free(&g.screen);
+    }
+
+    /* moving into the cell the tail is leaving this tick is legal */
+    {
+        /* len-3 snake at (10,10),(9,10),(8,10) moving right; steer it in a
+           tight U: down, left, up - the up move enters the tail's old cell */
+        int u[] = {GK_DOWN, GK_LEFT, GK_UP};
+        run(&g, &s, 4, u, 3);
+        CHECK(s.dead == 0 && g.running == 1, "tail vacate is not self-collision");
+        screen_free(&g.screen);
+    }
+
+    /* death shows the game-over screen and a key press exits */
+    {
+        snake_setup(&g, &s, 42);
+        /* drive straight up into the wall */
+        int up[] = {GK_UP};
+        game_run_headless(&g, 12, up, 1);
+        CHECK(s.dead == 1, "wall hit kills");
+        CHECK(g.running == 1, "game-over screen waits");
+        int any[] = {'x'};
+        game_run_headless(&g, 1, any, 1);
+        CHECK(g.running == 0, "a key press exits the game-over screen");
+        screen_free(&g.screen);
+    }
 
     TEST_RESULTS();
 }
