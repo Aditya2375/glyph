@@ -58,3 +58,14 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). `./tests/run-tests.sh`
 runs 27 checks: engine primitives, and gameplay itself - steering,
 no-reverse, eating and growth, wall death, quitting - plus a golden
 rendered frame. CI runs the same script on every push.
+
+## Tested / not tested
+
+Tested here: 18 engine unit checks (screen, diff flush, input queue and
+escape decoding over a real pipe, collision), 9 headless gameplay checks
+that drive snake for real (steering, blocked reverse, eating/growth, wall
+death, quitting), and a byte-exact golden rendered frame.
+
+Not tested: interactive play by a human on a real terminal (the game logic
+is headless-verified; the ANSI output is verified as text, not by eye on
+every terminal emulator), window resize, and non-ANSI terminals.
