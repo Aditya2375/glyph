@@ -39,11 +39,15 @@ enum { GK_UP = 256, GK_DOWN, GK_LEFT, GK_RIGHT, GK_NONE = -1 };
 struct input {
     int keys[64];       /* queue of key codes */
     int head, tail;
+    unsigned long dropped;          /* keys lost to a full queue */
+    unsigned char esc[8];           /* partial escape sequence across reads */
+    int esc_len;
 };
 
 void input_push(struct input *in, int key);
 int input_poll(struct input *in);             /* GK_NONE when empty */
-/* decode available bytes from fd into the queue (non-blocking). */
+/* decode available bytes from fd into the queue (non-blocking); an escape
+   sequence split across reads is buffered until it completes. */
 void input_read_fd(struct input *in, int fd);
 
 /* the fixed-timestep loop */
@@ -58,6 +62,7 @@ struct game {
     void (*draw)(struct game *g);
 };
 
+/* fps is clamped to 1..1000; the loop uses a real accumulator. */
 void game_init(struct game *g, int w, int h, int fps);
 /* run headless for n ticks, feeding scripted keys, no sleeping/terminal */
 void game_run_headless(struct game *g, int ticks, const int *script, int script_len);

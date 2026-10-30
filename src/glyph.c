@@ -65,7 +65,7 @@ void screen_dump(const struct screen *s, FILE *out) {
 
 void input_push(struct input *in, int key) {
     int next = (in->tail + 1) % 64;
-    if (next == in->head) return;   /* full: drop */
+    if (next == in->head) { in->dropped++; return; }   /* full: drop, but count it */
     in->keys[in->tail] = key;
     in->tail = next;
 }
@@ -80,28 +80,54 @@ int input_poll(struct input *in) {
 #include <termios.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <sys/time.h>
+
+/* feed one byte through the escape-sequence state machine */
+static void input_byte(struct input *in, unsigned char b) {
+    if (in->esc_len == 0) {
+        if (b == 27) { in->esc[in->esc_len++] = b; return; }
+        input_push(in, b);
+        return;
+    }
+    if (in->esc_len == 1) {
+        if (b == '[') { in->esc[in->esc_len++] = b; return; }
+        input_push(in, 27);        /* a lone ESC, then this byte */
+        in->esc_len = 0;
+        if (b == 27) in->esc[in->esc_len++] = b;
+        else input_push(in, b);
+        return;
+    }
+    /* esc_len == 2: expecting the final byte of an arrow */
+    int key = GK_NONE;
+    switch (b) {
+    case 'A': key = GK_UP; break;
+    case 'B': key = GK_DOWN; break;
+    case 'C': key = GK_RIGHT; break;
+    case 'D': key = GK_LEFT; break;
+    }
+    if (key != GK_NONE) {
+        input_push(in, key);
+    } else {
+        input_push(in, 27);
+        input_push(in, '[');
+        input_push(in, b);
+    }
+    in->esc_len = 0;
+}
 
 void input_read_fd(struct input *in, int fd) {
     unsigned char buf[64];
     ssize_t n = read(fd, buf, sizeof buf);
     if (n <= 0) return;
-    for (ssize_t i = 0; i < n; i++) {
-        if (buf[i] == 27 && i + 2 < n && buf[i + 1] == '[') {
-            switch (buf[i + 2]) {
-            case 'A': input_push(in, GK_UP); i += 2; continue;
-            case 'B': input_push(in, GK_DOWN); i += 2; continue;
-            case 'C': input_push(in, GK_RIGHT); i += 2; continue;
-            case 'D': input_push(in, GK_LEFT); i += 2; continue;
-            }
-        }
-        input_push(in, buf[i]);
-    }
+    for (ssize_t i = 0; i < n; i++) input_byte(in, buf[i]);
 }
 
 void game_init(struct game *g, int w, int h, int fps) {
     memset(g, 0, sizeof *g);
     screen_init(&g->screen, w, h);
+    if (fps < 1) fps = 1;
+    if (fps > 1000) fps = 1000;
     g->fps = fps;
     g->running = 1;
 }
@@ -115,18 +141,26 @@ void game_run_headless(struct game *g, int ticks, const int *script, int script_
     }
 }
 
-static long now_ms(void) {
+static long now_us(void) {
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    return tv.tv_sec * 1000000L + tv.tv_usec;
 }
 
 int game_run(struct game *g) {
-    struct termios saved, raw;
-    if (tcgetattr(0, &saved) != 0) {
+    struct winsize ws;
+    if (tcgetattr(0, &(struct termios){0}) != 0) {
         fprintf(stderr, "glyph: stdin is not a terminal\n");
         return 1;
     }
+    if (ioctl(0, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 && ws.ws_row > 0 &&
+        ((int)ws.ws_col < g->screen.w || (int)ws.ws_row < g->screen.h)) {
+        fprintf(stderr, "glyph: terminal is %dx%d, need at least %dx%d\n",
+                ws.ws_col, ws.ws_row, g->screen.w, g->screen.h);
+        return 1;
+    }
+    struct termios saved, raw;
+    tcgetattr(0, &saved);
     raw = saved;
     raw.c_lflag &= ~(ICANON | ECHO);
     raw.c_cc[VMIN] = 0;
@@ -135,17 +169,27 @@ int game_run(struct game *g) {
     printf("\033[?25l\033[2J");   /* hide cursor, clear */
     fflush(stdout);
 
-    long frame_ms = 1000 / g->fps;
+    /* fixed timestep with an accumulator: updates run at exactly fps,
+       rendering happens once per iteration, slow frames catch up in
+       bounded steps instead of drifting or spiraling */
+    const long frame_us = 1000000L / g->fps;
+    long last = now_us();
+    long acc = 0;
     while (g->running) {
-        long start = now_ms();
+        long now = now_us();
+        acc += now - last;
+        last = now;
+        if (acc > 8 * frame_us) acc = 8 * frame_us;
         input_read_fd(&g->input, 0);
-        g->update(g);
+        while (acc >= frame_us && g->running) {
+            g->update(g);
+            g->tick++;
+            acc -= frame_us;
+        }
         g->draw(g);
         screen_flush(&g->screen, stdout);
         fflush(stdout);
-        g->tick++;
-        long spent = now_ms() - start;
-        if (spent < frame_ms) usleep((useconds_t)(frame_ms - spent) * 1000);
+        usleep(500);
     }
 
     printf("\033[?25h\033[0m\033[2J");
