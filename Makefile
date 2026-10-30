@@ -1,7 +1,8 @@
 CC      ?= cc
-CFLAGS  ?= -std=gnu11 -O2 -g -Wall -Wextra -Werror -Isrc
+CFLAGS  ?= -O2 -g
+CFLAGS  += -std=gnu11 -Wall -Wextra -Werror -Isrc
 
-all: build/libglyph.a build/snake
+all: build/libglyph.a build/snake build/life
 
 build/libglyph.a: src/glyph.c src/glyph.h
 	@mkdir -p build
@@ -10,6 +11,9 @@ build/libglyph.a: src/glyph.c src/glyph.h
 
 build/snake: examples/snake.c build/libglyph.a
 	$(CC) $(CFLAGS) -Iexamples examples/snake.c build/libglyph.a -o $@
+
+build/life: examples/life.c build/libglyph.a
+	$(CC) $(CFLAGS) -Iexamples examples/life.c build/libglyph.a -o $@
 
 check: all
 	./tests/run-tests.sh
