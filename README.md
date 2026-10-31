@@ -1,5 +1,7 @@
 # glyph
 
+**[Play snake in your browser](https://aditya2375.github.io/glyph/)** - the real engine and game compiled to WebAssembly, no install.
+
 A terminal game engine in C: fixed-timestep loop, double-buffered cell
 graphics with colors, raw input with arrow-key decoding, AABB collision
 helpers, and a headless mode that runs the whole game without a terminal

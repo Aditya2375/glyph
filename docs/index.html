@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>glyph - a game engine, live in your browser</title>
+<style>
+  :root { --bg: #0d1117; --panel: #161b22; --edge: #30363d; --fg: #7ee787; --dim: #8b949e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 14px/1.5 "SF Mono", ui-monospace, Menlo, Consolas, monospace; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h1 .star { color: var(--dim); font-weight: normal; }
+  p.sub { color: var(--dim); margin: 0 0 20px; }
+  a { color: #58a6ff; }
+  .panel { background: #000; border: 1px solid var(--edge); border-radius: 8px; padding: 12px; display: inline-block; }
+  canvas { display: block; image-rendering: pixelated; }
+  .row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  button { background: #21262d; color: var(--fg); border: 1px solid var(--edge);
+           border-radius: 6px; padding: 6px 14px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--fg); }
+  button:disabled { opacity: .5; cursor: wait; }
+  #hint { color: var(--dim); margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>glyph <span class="star">- a terminal game engine</span></h1>
+  <p class="sub">Playable snake running the real engine: glyph.c and snake.c compiled to
+     WebAssembly, one fixed-timestep tick at a time. The native build draws to your terminal
+     with ANSI; here the same screen buffer is drawn to a canvas.
+     <a href="https://github.com/Aditya2375/glyph">Source on GitHub</a>.</p>
+
+  <div class="row">
+    <button id="restart" disabled>loading engine...</button>
+  </div>
+
+  <div class="panel"><canvas id="screen"></canvas></div>
+  <p id="hint">arrows or WASD to steer. any key on the game-over screen ends the run.</p>
+</main>
+
+<script src="glyph.js"></script>
+<script>
+const COLORS = ["#000000","#f85149","#7ee787","#e3b341","#58a6ff","#d2a8ff","#39c5cf","#c9d1d9","#8b949e"];
+const GK = { ArrowUp:256, ArrowDown:257, ArrowLeft:258, ArrowRight:259,
+             w:256, s:257, a:258, d:259, W:256, S:257, A:258, D:259 };
+const canvas = document.getElementById("screen");
+const ctx = canvas.getContext("2d");
+const btn = document.getElementById("restart");
+const CELL_W = 12, CELL_H = 18;
+ctx.font = '16px "SF Mono", ui-monospace, Menlo, Consolas, monospace';
+ctx.textBaseline = "top";
+
+let mod = null, game = 0, w = 0, h = 0;
+
+function newGame() {
+  if (game) mod.ccall("glyph_snake_free", null, ["number"], [game]);
+  game = mod.ccall("glyph_snake_new", "number", ["number"], [(Math.random() * 0xffffffff) >>> 0]);
+  w = mod.ccall("glyph_w", "number", ["number"], [game]);
+  h = mod.ccall("glyph_h", "number", ["number"], [game]);
+  canvas.width = w * CELL_W;
+  canvas.height = h * CELL_H;
+}
+
+function draw() {
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const c = mod.ccall("glyph_cell", "number", ["number","number"], [game, y * w + x]);
+      const ch = (c >> 16) & 0xff, fg = (c >> 8) & 0xff, bg = c & 0xff;
+      ctx.fillStyle = COLORS[bg] || "#000";
+      ctx.fillRect(x * CELL_W, y * CELL_H, CELL_W, CELL_H);
+      if (ch !== 32) {
+        ctx.fillStyle = COLORS[fg] || COLORS[8];
+        ctx.fillText(String.fromCharCode(ch), x * CELL_W + 2, y * CELL_H + 1);
+      }
+    }
+  }
+}
+
+GlyphModule().then((m) => {
+  mod = m;
+  newGame();
+  btn.disabled = false;
+  btn.textContent = "restart";
+  setInterval(() => {
+    const running = mod.ccall("glyph_tick", "number", ["number"], [game]);
+    draw();
+    if (!running) newGame();
+  }, 125);
+});
+
+btn.onclick = newGame;
+window.addEventListener("keydown", (e) => {
+  const k = GK[e.key];
+  if (k !== undefined && mod) {
+    mod.ccall("glyph_key", null, ["number","number"], [game, k]);
+    e.preventDefault();
+  } else if (mod && e.key === "q") {
+    mod.ccall("glyph_key", null, ["number","number"], [game, 113]);
+  }
+});
+</script>
+</body>
+</html>
