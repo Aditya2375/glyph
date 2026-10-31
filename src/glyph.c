@@ -36,7 +36,7 @@ static int ansi_bg(uint8_t c) { return c == GLYPH_DEFAULT ? 49 : 40 + c; }
 
 long screen_flush(struct screen *s, FILE *out) {
     long written = 0;
-    int cur_fg = -1, cur_bg = -1;
+    int cur_fg = -1, cur_bg = -1;   /* -1: no attribute sequence emitted */
     for (int y = 0; y < s->h; y++) {
         for (int x = 0; x < s->w; x++) {
             struct cell *f = &s->front[y * s->w + x];
@@ -51,7 +51,8 @@ long screen_flush(struct screen *s, FILE *out) {
             written += fprintf(out, "\033[%d;%dH%c", y + 1, x + 1, b->ch);
         }
     }
-    written += fprintf(out, "\033[0m");
+    if (cur_fg != -1)               /* only reset when colors were set */
+        written += fprintf(out, "\033[0m");
     return written;
 }
 
@@ -189,7 +190,9 @@ int game_run(struct game *g) {
         g->draw(g);
         screen_flush(&g->screen, stdout);
         fflush(stdout);
-        usleep(500);
+        /* sleep the remainder of the frame instead of polling */
+        if (g->running && acc < frame_us)
+            usleep((useconds_t)(frame_us - acc));
     }
 
     printf("\033[?25h\033[0m\033[2J");
