@@ -16,7 +16,8 @@ Two cell grids (front = what the terminal shows, back = what the game just
 drew). `screen_flush` walks both, and for each changed cell emits a cursor
 move plus the character, batching color escapes so identical runs cost one
 escape sequence. Unchanged cells emit nothing - a mostly-static frame is a
-handful of bytes.
+handful of bytes, and a completely unchanged frame emits literally zero
+bytes (the trailing color reset is only written when a color sequence was).
 
 ## Input
 

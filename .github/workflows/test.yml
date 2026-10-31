@@ -6,3 +6,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: make check
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make clean
+      - run: make EXTRA="-fsanitize=address,undefined -fno-omit-frame-pointer"
+      - run: ASAN_OPTIONS=detect_leaks=1 EXTRA="-fsanitize=address,undefined" ./tests/run-tests.sh
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./tests/check-docs.sh
