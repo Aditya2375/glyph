@@ -20,6 +20,7 @@ int main(void) {
             if (l.cells[y][x]) { live_cells++; if (x < minx) minx = x; if (y < miny) miny = y; }
     CHECK(live_cells == 5, "glider stays five cells");
     CHECK(minx == 2 && miny == 2, "glider translated by (1,1) after 4 ticks");
+    screen_free(&g.screen);
 
     /* still life: a block never changes */
     life_setup(&g, &l);
@@ -32,6 +33,7 @@ int main(void) {
         for (int x = 0; x < LW; x++)
             if (l.cells[y][x]) others++;
     CHECK(others == 4, "block spawns nothing");
+    screen_free(&g.screen);
 
     /* q quits */
     life_setup(&g, &l);
