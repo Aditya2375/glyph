@@ -5,7 +5,7 @@
 #include <stdio.h>
 
 /* glyph - a terminal game engine: fixed-timestep loop, double-buffered
-   cell grid with colors, raw input, AABB physics, scene stack. */
+   cell grid with colors, raw input, AABB physics. */
 
 enum {
     GLYPH_BLACK, GLYPH_RED, GLYPH_GREEN, GLYPH_YELLOW,

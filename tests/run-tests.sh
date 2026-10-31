@@ -30,4 +30,8 @@ cc -std=gnu11 -O2 -g -Wall -Wextra -Werror -Isrc -Iexamples -DLIFE_NO_MAIN $EXTR
     tests/pty_test.c examples/life.c build/libglyph.a -lutil -o "$OUT/pty_test"
 "$OUT/pty_test"
 
+# SIGINT mid-run: terminal restored, honest death by the signal
+cc -std=gnu11 -O2 -g -Wall -Wextra -Werror -Isrc -Iexamples -DLIFE_NO_MAIN $EXTRA     tests/signal_test.c examples/life.c build/libglyph.a -lutil -o "$OUT/signal_test"
+"$OUT/signal_test"
+
 echo "ALL TESTS PASSED"

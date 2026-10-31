@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <string.h>
 
 void screen_init(struct screen *s, int w, int h) {
@@ -148,6 +149,9 @@ static long now_us(void) {
     return tv.tv_sec * 1000000L + tv.tv_usec;
 }
 
+static volatile sig_atomic_t got_quit;
+static void on_quit(int sig) { got_quit = sig; }
+
 int game_run(struct game *g) {
     struct winsize ws;
     if (tcgetattr(0, &(struct termios){0}) != 0) {
@@ -167,6 +171,13 @@ int game_run(struct game *g) {
     raw.c_cc[VMIN] = 0;
     raw.c_cc[VTIME] = 0;
     tcsetattr(0, TCSAFLUSH, &raw);
+    /* no SA_RESTART: a signal interrupts sleeps and reads so the loop can
+       unwind promptly instead of hanging in usleep */
+    struct sigaction sa = { .sa_handler = on_quit };
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+    got_quit = 0;
     printf("\033[?25l\033[2J");   /* hide cursor, clear */
     fflush(stdout);
 
@@ -176,7 +187,7 @@ int game_run(struct game *g) {
     const long frame_us = 1000000L / g->fps;
     long last = now_us();
     long acc = 0;
-    while (g->running) {
+    while (g->running && !got_quit) {
         long now = now_us();
         acc += now - last;
         last = now;
@@ -197,6 +208,12 @@ int game_run(struct game *g) {
 
     printf("\033[?25h\033[0m\033[2J");
     tcsetattr(0, TCSAFLUSH, &saved);
+    fflush(stdout);
+    if (got_quit) {
+        /* restore done above; re-raise so the exit status is honest */
+        signal(got_quit, SIG_DFL);
+        raise(got_quit);
+    }
     return 0;
 }
 
